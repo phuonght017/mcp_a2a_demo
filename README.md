@@ -71,8 +71,90 @@ Managed via `uv` / `pyproject.toml`:
 - `mcp`
 - `openai`
 - `python-dotenv`
+- `fastapi`
+- `uvicorn`
+- `httpx`
 
 Install with:
 ```bash
 uv sync
 ```
+
+---
+
+## B. A2A Server and Client
+
+### Architecture Overview
+
+```
+┌─────────────┐      A2A Protocol       ┌─────────────────────────────┐
+│  A2A Client  │  ───────────────────>  │        A2A Server            │
+│ (a2a_client) │     HTTP/JSON          │      (a2a_server.py)          │
+└─────────────┘                        │                             │
+                                      │  ┌─────────────┐  ┌────────┐ │
+                                      │  │ direct-agent │  │mcp-agent│ │
+                                      │  │  (LLM only)  │  │(MCP    │ │
+                                      │  └─────────────┘  │ + LLM)  │ │
+                                      │                   └────┬───┘ │
+                                      │                        │     │
+                                      │                   MCP Client │
+                                      │                        │     │
+                                      │                   MCP Server │
+                                      │                   (server.py)│
+                                      └─────────────────────────────┘
+```
+
+### A2A Server (`a2a_server.py`)
+
+FastAPI server implementing simplified Google A2A protocol.
+
+| Agent | Description | Endpoint |
+|-------|-------------|----------|
+| `direct-agent` | Xử lý trực tiếp qua LLM, không dùng MCP | `/agents/direct-agent` |
+| `mcp-agent` | Kết nối tới MCP Server (`server.py`) qua STDIO để gọi tools | `/agents/mcp-agent` |
+
+Endpoints:
+- `GET /agents/{agent_id}/agent.json` — Agent Card (metadata)
+- `POST /agents/{agent_id}/tasks/send` — Gửi task và nhận kết quả
+
+Run:
+```bash
+uv run a2a_server.py
+```
+Server listens on `http://localhost:8000`.
+
+### A2A Client (`a2a_client.py`)
+
+Client khám phá Agent Card và gửi task.
+
+Usage:
+```bash
+uv run a2a_client.py <agent_id> "<message>"
+```
+
+Ví dụ:
+```bash
+# Gửi tới direct-agent
+uv run a2a_client.py direct-agent "Giới thiệu về kiến trúc MCP và A2A"
+
+# Gửi tới mcp-agent (yêu cầu LLM gọi tool)
+uv run a2a_client.py mcp-agent "Tính tổng 5 và 10, sau đó kiểm tra trạng thái hệ thống"
+```
+
+### Run the Full Demo
+
+1. **Start A2A Server**:
+   ```bash
+   uv run a2a_server.py
+   ```
+   
+2. **In another terminal, run A2A Client**:
+   ```bash
+   uv run a2a_client.py direct-agent 'Chào bạn'
+   uv run a2a_client.py mcp-agent 'Tính 2+3 và lấy trạng thái hệ thống'
+   ```
+
+3. **(Optional) Run original MCP Client directly**:
+   ```bash
+   uv run client.py server.py
+   ```
